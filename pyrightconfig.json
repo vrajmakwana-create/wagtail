@@ -1,0 +1,11 @@
+{
+  "venvPath": "d:\\Vraj Development\\Wagtail",
+  "venv": "venv",
+  "extraPaths": [
+    "d:\\Vraj Development\\Wagtail",
+    "d:\\Vraj Development\\Wagtail\\venv\\Lib\\site-packages"
+  ],
+  "typeCheckingMode": "off",
+  "reportMissingImports": "none",
+  "reportMissingModuleSource": "none"
+}

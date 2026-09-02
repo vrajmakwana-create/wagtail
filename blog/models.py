@@ -9,10 +9,12 @@ from wagtail.admin.panels import FieldPanel
 from wagtail.images import get_image_model_string
 from wagtail.snippets.models import register_snippet
 from .blocks import BlogStreamBlock
-
+from wagtail_headless_preview.models import HeadlessPreviewMixin
+from wagtail.api import APIField
+from wagtail.fields import RichTextField
 
 # BlogPage DB Schema
-class BlogPage(Page):
+class BlogPage(HeadlessPreviewMixin, Page):
 
     short_description = models.TextField(
         max_length=500,
@@ -41,6 +43,7 @@ class BlogPage(Page):
         use_json_field=True,
     )
 
+
     published_date = models.DateTimeField(
         null=True,
         blank=True,
@@ -51,7 +54,17 @@ class BlogPage(Page):
         blank=True,
     )
 
-    content_panels = Page.content_panels + [
+    # Fields exposed to Wagtail API
+    api_fields = [
+        APIField("short_description"),
+        APIField("category"),
+        APIField("featured_image"),
+        APIField("body"),
+        APIField("published_date"),
+        APIField("author"),
+    ]
+
+    content_panels = Page.content_panels + [  # type: ignore[bad-override]
         FieldPanel("short_description"),
         FieldPanel("featured_image"),
         FieldPanel("body"),
@@ -79,5 +92,5 @@ class BlogCategory(models.Model):
         FieldPanel("slug"),
     ]
 
-    def __str__(self):
-        return self.name
+    def __str__(self):  # type: ignore[bad-override]
+        return self.name 
