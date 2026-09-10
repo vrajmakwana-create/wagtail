@@ -79,6 +79,25 @@ class CalloutBlock(blocks.StructBlock):
         label = "Callout / Alert Box"
 
 
+class ImageWithAltBlock(blocks.StructBlock):
+    image = ImageChooserBlock(
+        required=True,
+        help_text="Upload or select an image",
+    )
+    alt_text = blocks.CharBlock(
+        required=False,
+        help_text="Alt text for SEO & Accessibility (Optional, defaults to image title if blank)",
+    )
+    caption = blocks.CharBlock(
+        required=False,
+        help_text="Image caption shown below image (Optional)",
+    )
+
+    class Meta:  # type: ignore[name-defined]
+        icon = "image"
+        label = "Image with Alt Text"
+
+
 class BlogStreamBlock(blocks.StreamBlock):
 
     # TEXT BLOCKS
@@ -135,9 +154,7 @@ class BlogStreamBlock(blocks.StreamBlock):
     )
 
     # MEDIA BLOCKS
-    image = ImageChooserBlock(
-        help_text="Upload or select an image"
-    )
+    image = ImageWithAltBlock()
 
     embed = EmbedBlock(
         help_text="Embed YouTube, Vimeo, Twitter/X, or other media URLs"
