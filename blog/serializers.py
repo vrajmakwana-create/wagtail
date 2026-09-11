@@ -1,13 +1,43 @@
 from rest_framework import serializers
 
-from .models import BlogPage, BlogCategory
+from .models import BlogPage, BlogCategory, BlogSubCategory, BlogComment, BlogLike
 from wagtail.rich_text import RichText
 from wagtail.images import get_image_model
+
 
 WagtailImage = get_image_model()
 
 
-class CategorySerializer(serializers.ModelSerializer):
+class SubCategorySerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model = BlogSubCategory
+
+        fields = [
+            "id",
+            "name",
+            "slug",
+        ]
+
+
+class CategorySimpleSerializer(serializers.ModelSerializer):
+
+    description = serializers.SerializerMethodField()
+
+    class Meta:
+        model = BlogCategory
+
+        fields = [
+            "id",
+            "name",
+            "slug",
+            "description",
+        ]
+
+    def get_description(self, obj):
+        return str(obj.description) if obj.description else ""
+
+class CategoryBlogDetailSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = BlogCategory
@@ -19,18 +49,45 @@ class CategorySerializer(serializers.ModelSerializer):
         ]
 
 
+class CategorySerializer(serializers.ModelSerializer):
+
+    subcategories = SubCategorySerializer(many=True, read_only=True)
+    description = serializers.SerializerMethodField()
+
+    class Meta:
+        model = BlogCategory
+
+        fields = [
+            "id",
+            "name",
+            "slug",
+            "description",
+            "subcategories",
+        ]
+
+    def get_description(self, obj):
+        return str(obj.description) if obj.description else ""
+
+
 class ImageSerializer(serializers.ModelSerializer):
     url = serializers.SerializerMethodField()
+    alt_text = serializers.SerializerMethodField()
 
     class Meta:
         model = WagtailImage
         fields = [
             "id",
             "title",
+            "alt_text",
             "url",
             "width",
             "height",
         ]
+
+    def get_alt_text(self, obj):
+        if not obj:
+            return ""
+        return getattr(obj, "alt_text", None) or getattr(obj, "title", "")
 
     def get_url(self, obj):
         if not obj or not getattr(obj, "file", None):
@@ -103,27 +160,6 @@ class StreamFieldSerializer(serializers.Field):
 
         return value
 
-
-class BlogListSerializer(serializers.ModelSerializer):
-
-    category = CategorySerializer(read_only=True)
-    featured_image = ImageSerializer(read_only=True)
-
-    class Meta:
-        model = BlogPage
-
-        fields = [
-            "id",
-            "title",
-            "slug",
-            "short_description",
-            "category",
-            "featured_image",
-            "author",
-            "published_date",
-        ]
-
-
 class BlogChildSerializer(serializers.ModelSerializer):
 
     class Meta:
@@ -133,18 +169,100 @@ class BlogChildSerializer(serializers.ModelSerializer):
             "id",
             "title",
             "slug",
-            "short_description",
         ]
 
+def get_author_details(obj, context=None):
+    user = obj.owner
+    user_id = user.id if user else None
+    name = ""
+    bio = ""
+    profile_image_url = None
 
-class BlogDetailSerializer(serializers.ModelSerializer):
+    if user:
+        name = user.get_full_name() or user.username
+        profile = getattr(user, "profile", None)
+        if profile:
+            bio = profile.bio or ""
+            profile_image_url = profile.profile_image_url
+            if not profile_image_url and profile.profile_image:
+                request = context.get("request") if context else None
+                url = profile.profile_image.url
+                if request and url.startswith("/"):
+                    profile_image_url = request.build_absolute_uri(url)
+                else:
+                    profile_image_url = url
+    else:
+        name = obj.author if obj.author else "Admin"
 
-    category = CategorySerializer(read_only=True)
+    return {
+        "id": user_id,
+        "name": name,
+        "bio": bio,
+        "profile_image_url": profile_image_url,
+    }
+
+
+
+class BlogCommentCreateSerializer(serializers.ModelSerializer):
+    parent = serializers.PrimaryKeyRelatedField(
+        queryset=BlogComment.objects.all(),
+        required=False,
+        allow_null=True,
+    )
+
+    class Meta:
+        model = BlogComment
+        fields = [
+            "name",
+            "email",
+            "message",
+            "parent",
+        ]
+
+    def validate_parent(self, value):
+        if value:
+            blog = self.context.get("blog")
+            if blog and value.blog != blog:
+                raise serializers.ValidationError(
+                    "Parent comment must belong to the same blog."
+                )
+        return value
+
+
+class BlogCommentSerializer(serializers.ModelSerializer):
+    replies = serializers.SerializerMethodField()
+
+    class Meta:
+        model = BlogComment
+        fields = [
+            "id",
+            "name",
+            "email",
+            "message",
+            "parent",
+            "status",
+            "created_at",
+            "replies",
+        ]
+
+    def get_replies(self, obj):
+        approved_replies = obj.replies.filter(status=BlogComment.STATUS_APPROVED).order_by("created_at")
+        return BlogCommentSerializer(approved_replies, many=True, context=self.context).data
+
+
+class BlogListSerializer(serializers.ModelSerializer):
+
+    category = CategorySimpleSerializer(read_only=True)
+    subcategory = SubCategorySerializer(read_only=True)
     featured_image = ImageSerializer(read_only=True)
-
-    body = StreamFieldSerializer()
-
+    social_image = ImageSerializer(read_only=True)
     children = serializers.SerializerMethodField()
+    author = serializers.SerializerMethodField()
+
+    seo_title = serializers.SerializerMethodField()
+    seo_description = serializers.SerializerMethodField()
+    likes_count = serializers.SerializerMethodField()
+    comments_count = serializers.SerializerMethodField()
 
     class Meta:
         model = BlogPage
@@ -155,12 +273,34 @@ class BlogDetailSerializer(serializers.ModelSerializer):
             "slug",
             "short_description",
             "category",
+            "subcategory",
+            "children",
             "featured_image",
             "author",
             "published_date",
-            "body",
-            "children",
+            "likes_count",
+            "comments_count",
+            "seo_title",
+            "seo_description",
+            "social_title",
+            "social_description",
+            "social_image",
         ]
+
+    def get_author(self, obj):
+        return get_author_details(obj, self.context)
+
+    def get_seo_title(self, obj):
+        return obj.seo_title if obj.seo_title else obj.title
+
+    def get_seo_description(self, obj):
+        return obj.search_description if obj.search_description else obj.short_description
+
+    def get_likes_count(self, obj):
+        return obj.likes.count()
+
+    def get_comments_count(self, obj):
+        return obj.comments.filter(status=BlogComment.STATUS_APPROVED).count()
 
     def get_children(self, obj):
 
@@ -174,4 +314,94 @@ class BlogDetailSerializer(serializers.ModelSerializer):
         return BlogChildSerializer(
             children,
             many=True
-        ).data
+        ).data
+
+
+class BlogDetailSerializer(serializers.ModelSerializer):
+
+    category = CategoryBlogDetailSerializer(read_only=True)
+    subcategory = SubCategorySerializer(read_only=True)
+    featured_image = ImageSerializer(read_only=True)
+    author = serializers.SerializerMethodField()
+
+    body = StreamFieldSerializer()
+    children = serializers.SerializerMethodField()
+    metadata = serializers.SerializerMethodField()
+    likes_count = serializers.SerializerMethodField()
+    comments_count = serializers.SerializerMethodField()
+    is_liked = serializers.SerializerMethodField()
+
+    class Meta:
+        model = BlogPage
+
+        fields = [
+            "id",
+            "title",
+            "slug",
+            "short_description",
+            "category",
+            "subcategory",
+            "featured_image",
+            "author",
+            "published_date",
+            "likes_count",
+            "comments_count",
+            "is_liked",
+            "body",
+            "children",
+            "metadata",
+        ]
+
+    def get_author(self, obj):
+        return get_author_details(obj, self.context)
+
+    def get_likes_count(self, obj):
+        return obj.likes.count()
+
+    def get_comments_count(self, obj):
+        return obj.comments.filter(status=BlogComment.STATUS_APPROVED).count()
+
+    def get_is_liked(self, obj):
+        request = self.context.get("request")
+        if request:
+            device_id = request.query_params.get("device_id")
+            if device_id:
+                return obj.likes.filter(device_id=device_id).exists()
+        return False
+
+    def get_metadata(self, obj):
+        request = self.context.get("request")
+        social_image_data = ImageSerializer(obj.social_image, context={"request": request}).data if obj.social_image else None
+
+        return {
+            "focus_keyphrase": obj.focus_keyphrase,
+            "keyphrase_synonyms": obj.keyphrase_synonyms,
+            "canonical_url": obj.canonical_url,
+            "is_cornerstone": obj.is_cornerstone,
+            "robots_index": obj.robots_index,
+            "robots_follow": obj.robots_follow,
+            "seo_title": obj.seo_title if obj.seo_title else obj.title,
+            "seo_description": obj.search_description if obj.search_description else obj.short_description,
+            "social_title": obj.social_title,
+            "social_description": obj.social_description,
+            "social_image": social_image_data,
+            "seo_report": obj.get_seo_report(),
+            "readability_report": obj.get_readability_report(),
+            "json_ld_schema": obj.get_json_ld_schema(),
+        }
+
+    def get_children(self, obj):
+
+        children = (
+            obj
+            .get_children()
+            .live()
+            .specific()
+        )
+
+        return BlogChildSerializer(
+            children,
+            many=True
+        ).data
+
+
