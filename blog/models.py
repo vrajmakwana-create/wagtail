@@ -17,6 +17,9 @@ from wagtail.fields import RichTextField
 from typing import cast
 
 
+from django.core.exceptions import ValidationError
+
+
 def generate_uuid_str():
     return str(uuid.uuid4())
 
@@ -33,6 +36,10 @@ class BlogPageForm(WagtailAdminPageForm):
             if "category" in self.fields:
                 self.fields["category"].widget = forms.HiddenInput()
                 self.fields["category"].required = False
+        else:
+            if "subcategory" in self.fields:
+                self.fields["subcategory"].required = True
+
 
 
 # BlogPage DB Schema

@@ -380,6 +380,20 @@ class BlogCommentsAndLikesTestCase(TestCase):
         self.assertEqual(len(results), 1)
         self.assertEqual(results[0]["title"], "Author Specific Blog")
 
+    def test_subcategory_mandatory_on_top_level_blog_page(self):
+        FormClass = BlogPage.get_edit_handler().get_form_class()
+
+        # Verify BlogPageForm requires subcategory for top level page
+        form = FormClass()
+        self.assertTrue(form.fields["subcategory"].required)
+
+        # Verify BlogPageForm hides subcategory and does not require it for child blog page
+        parent_page = BlogPage(title="Parent", slug="parent")
+        child_form = FormClass(parent_page=parent_page)
+        self.assertFalse(child_form.fields["subcategory"].required)
+
+
+
 
 
 
