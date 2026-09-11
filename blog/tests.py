@@ -12,7 +12,7 @@ class BlogCategorySubCategoryTestCase(TestCase):
         self.category = BlogCategory.objects.create(
             name="Technology",
             slug="technology",
-            description="<p>Technology related articles</p>"
+            description="Technology related articles"
         )
         self.subcategory = BlogSubCategory.objects.create(
             category=self.category,
@@ -35,7 +35,7 @@ class BlogCategorySubCategoryTestCase(TestCase):
 
         category_item = data["result"][0]
         self.assertEqual(category_item["name"], "Technology")
-        self.assertEqual(category_item["description"], "<p>Technology related articles</p>")
+        self.assertEqual(category_item["description"], "Technology related articles")
         self.assertEqual(len(category_item["subcategories"]), 1)
         self.assertEqual(category_item["subcategories"][0]["name"], "Python")
         self.assertEqual(category_item["subcategories"][0]["id"], self.subcategory.id)
@@ -98,7 +98,7 @@ class BlogCategorySubCategoryTestCase(TestCase):
         self.assertIn("category", blog_item)
         category_data = blog_item["category"]
         self.assertEqual(category_data["name"], "Technology")
-        self.assertEqual(category_data["description"], "<p>Technology related articles</p>")
+        self.assertEqual(category_data["description"], "Technology related articles")
         self.assertNotIn("subcategories", category_data)
 
     def test_child_blog_page_category_and_subcategory_set_to_none(self):

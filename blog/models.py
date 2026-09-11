@@ -273,7 +273,7 @@ class BlogCategory(models.Model):
         unique=True,
     )
 
-    description = RichTextField(
+    description = models.TextField(
         blank=True,
         help_text="Category description",
     )
