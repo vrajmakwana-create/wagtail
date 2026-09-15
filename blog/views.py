@@ -6,6 +6,10 @@ from rest_framework.response import Response
 from rest_framework import status
 from .responses import success_response, error_response
 
+from django.contrib.auth import get_user_model
+from django.contrib.contenttypes.models import ContentType
+from wagtail_headless_preview.models import PagePreview
+
 from .models import BlogPage, BlogCategory, BlogSubCategory, BlogComment, BlogLike
 from .serializers import (
     BlogListSerializer,
@@ -14,11 +18,8 @@ from .serializers import (
     SubCategorySerializer,
     BlogCommentCreateSerializer,
     BlogCommentSerializer,
+    get_user_author_details,
 )
-
-
-from django.contrib.contenttypes.models import ContentType
-from wagtail_headless_preview.models import PagePreview
 
 from core.responses import APIResponse
 from core.pagination import StandardResultsSetPagination
@@ -325,6 +326,14 @@ class BlogLikeToggleAPIView(APIView):
 class AuthorBlogListAPIView(APIView):
 
     def get(self, request, user_id):
+        User = get_user_model()
+        user = User.objects.filter(id=user_id).first()
+
+        if not user:
+            return Response(
+                {"detail": "Author not found"},
+                status=status.HTTP_404_NOT_FOUND,
+            )
 
         blogs = (
             BlogPage.objects
@@ -349,9 +358,18 @@ class AuthorBlogListAPIView(APIView):
             context={"request": request},
         )
 
-        return paginator.get_paginated_response(
+        response = paginator.get_paginated_response(
             serializer.data
         )
+
+        author_data = get_user_author_details(user, context={"request": request})
+
+        response.data = {
+            "author": author_data,
+            **response.data,
+        }
+
+        return response
 
 
 

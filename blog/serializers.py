@@ -171,34 +171,43 @@ class BlogChildSerializer(serializers.ModelSerializer):
             "slug",
         ]
 
-def get_author_details(obj, context=None):
-    user = obj.owner
-    user_id = user.id if user else None
-    name = ""
+def get_user_author_details(user, context=None):
+    if not user:
+        return None
+
+    name = user.get_full_name() or user.username
     bio = ""
     profile_image_url = None
 
-    if user:
-        name = user.get_full_name() or user.username
-        profile = getattr(user, "profile", None)
-        if profile:
-            bio = profile.bio or ""
-            profile_image_url = profile.profile_image_url
-            if not profile_image_url and profile.profile_image:
-                request = context.get("request") if context else None
-                url = profile.profile_image.url
-                if request and url.startswith("/"):
-                    profile_image_url = request.build_absolute_uri(url)
-                else:
-                    profile_image_url = url
-    else:
-        name = obj.author if obj.author else "Admin"
+    profile = getattr(user, "profile", None)
+    if profile:
+        bio = profile.bio or ""
+        profile_image_url = profile.profile_image_url
+        if not profile_image_url and profile.profile_image:
+            request = context.get("request") if context else None
+            url = profile.profile_image.url
+            if request and url.startswith("/"):
+                profile_image_url = request.build_absolute_uri(url)
+            else:
+                profile_image_url = url
 
     return {
-        "id": user_id,
+        "id": user.id,
         "name": name,
         "bio": bio,
         "profile_image_url": profile_image_url,
+    }
+
+
+def get_author_details(obj, context=None):
+    if obj.owner:
+        return get_user_author_details(obj.owner, context)
+
+    return {
+        "id": None,
+        "name": obj.author if obj.author else "Admin",
+        "bio": "",
+        "profile_image_url": None,
     }
 
 
