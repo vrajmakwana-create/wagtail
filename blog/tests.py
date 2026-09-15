@@ -360,7 +360,12 @@ class BlogCommentsAndLikesTestCase(TestCase):
         from wagtail.models import Page
 
         User = get_user_model()
-        user = User.objects.create_user(username="author_user", password="password")
+        user = User.objects.create_user(
+            username="author_user",
+            first_name="Vraj",
+            last_name="Makwana",
+            password="password",
+        )
 
         root_page = Page.get_first_root_node()
 
@@ -376,6 +381,9 @@ class BlogCommentsAndLikesTestCase(TestCase):
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
         data = response.json()
+        self.assertIn("author", data)
+        self.assertEqual(data["author"]["id"], user.id)
+        self.assertEqual(data["author"]["name"], "Vraj Makwana")
         results = data.get("results", [])
         self.assertEqual(len(results), 1)
         self.assertEqual(results[0]["title"], "Author Specific Blog")
