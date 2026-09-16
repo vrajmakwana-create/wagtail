@@ -33,7 +33,7 @@ class BlogCategorySubCategoryTestCase(TestCase):
         self.assertEqual(data["code"], 200)
         self.assertTrue(len(data["result"]) >= 1)
 
-        category_item = data["result"][0]
+        category_item = next(c for c in data["result"] if c["slug"] == "technology")
         self.assertEqual(category_item["name"], "Technology")
         self.assertEqual(category_item["description"], "Technology related articles")
         self.assertEqual(len(category_item["subcategories"]), 1)
@@ -45,8 +45,9 @@ class BlogCategorySubCategoryTestCase(TestCase):
         self.assertEqual(response.status_code, 200)
         data = response.json()
         self.assertEqual(data["code"], 200)
-        self.assertEqual(len(data["result"]), 1)
-        self.assertEqual(data["result"][0]["slug"], "python")
+        self.assertTrue(len(data["result"]) >= 1)
+        python_sub = next(s for s in data["result"] if s["slug"] == "python")
+        self.assertEqual(python_sub["slug"], "python")
 
     def test_auto_category_population_from_subcategory(self):
         page = BlogPage(
@@ -280,10 +281,35 @@ class BlogCommentsAndLikesTestCase(TestCase):
         comment = BlogComment.objects.get(id=data["result"]["id"])
         self.assertEqual(comment.status, "pending")
 
-        # GET comments endpoint should return empty results when comment is pending
+        # GET comments endpoint should return empty results when comment is pending and no device_id provided
         get_resp = self.client.get(url)
         self.assertEqual(get_resp.status_code, 200)
         self.assertEqual(len(get_resp.json()["results"]), 0)
+
+    def test_pending_comment_visible_only_to_same_device_id(self):
+        url = f"/api/blogs/{self.blog.slug}/comments/"
+        payload = {
+            "name": "Alice",
+            "email": "alice@example.com",
+            "message": "Pending comment with device_id",
+            "device_id": "device_alice_123",
+        }
+        post_resp = self.client.post(url, data=payload, format="json")
+        self.assertEqual(post_resp.status_code, 201)
+
+        # 1. GET without device_id -> should NOT show pending comment
+        res_no_dev = self.client.get(url)
+        self.assertEqual(len(res_no_dev.json()["results"]), 0)
+
+        # 2. GET with different device_id -> should NOT show pending comment
+        res_other_dev = self.client.get(f"{url}?device_id=device_bob_456")
+        self.assertEqual(len(res_other_dev.json()["results"]), 0)
+
+        # 3. GET with same device_id -> SHOULD show pending comment
+        res_same_dev = self.client.get(f"{url}?device_id=device_alice_123")
+        self.assertEqual(len(res_same_dev.json()["results"]), 1)
+        self.assertEqual(res_same_dev.json()["results"][0]["device_id"], "device_alice_123")
+        self.assertEqual(res_same_dev.json()["results"][0]["status"], "pending")
 
     def test_get_approved_comments_and_nested_replies(self):
         from blog.models import BlogComment
@@ -388,17 +414,34 @@ class BlogCommentsAndLikesTestCase(TestCase):
         self.assertEqual(len(results), 1)
         self.assertEqual(results[0]["title"], "Author Specific Blog")
 
-    def test_subcategory_mandatory_on_top_level_blog_page(self):
+    def test_subcategory_optional_on_top_level_blog_page(self):
         FormClass = BlogPage.get_edit_handler().get_form_class()
 
-        # Verify BlogPageForm requires subcategory for top level page
+        # Verify BlogPageForm does NOT require subcategory for top level page
         form = FormClass()
-        self.assertTrue(form.fields["subcategory"].required)
+        self.assertFalse(form.fields["subcategory"].required)
 
         # Verify BlogPageForm hides subcategory and does not require it for child blog page
         parent_page = BlogPage(title="Parent", slug="parent")
         child_form = FormClass(parent_page=parent_page)
         self.assertFalse(child_form.fields["subcategory"].required)
+
+    def test_blog_page_without_subcategory_defaults_to_uncategorized(self):
+        from wagtail.models import Page
+        from blog.models import get_default_uncategorized_subcategory
+        root_page = Page.get_first_root_node()
+        blog_page = BlogPage(
+            title="Uncategorized Test Blog",
+            slug="uncategorized-test-blog",
+        )
+        root_page.add_child(instance=blog_page)
+
+        uncategorized_sub = get_default_uncategorized_subcategory()
+        self.assertIsNotNone(blog_page.subcategory)
+        self.assertEqual(blog_page.subcategory, uncategorized_sub)
+        self.assertEqual(blog_page.category, uncategorized_sub.category)
+        self.assertEqual(blog_page.category.slug, "uncategorized")
+        self.assertEqual(blog_page.subcategory.slug, "uncategorized")
 
 
 
