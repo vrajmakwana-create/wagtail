@@ -24,6 +24,22 @@ def generate_uuid_str():
     return str(uuid.uuid4())
 
 
+def get_default_uncategorized_subcategory():
+    category, _ = BlogCategory.objects.get_or_create(
+        slug="uncategorized",
+        defaults={
+            "name": "Uncategorized",
+            "description": "Default category for uncategorized posts",
+        },
+    )
+    subcategory, _ = BlogSubCategory.objects.get_or_create(
+        category=category,
+        slug="uncategorized",
+        defaults={"name": "Uncategorized"},
+    )
+    return subcategory
+
+
 class BlogPageForm(WagtailAdminPageForm):
 
     def __init__(self, *args, **kwargs):
@@ -38,7 +54,9 @@ class BlogPageForm(WagtailAdminPageForm):
                 self.fields["category"].required = False
         else:
             if "subcategory" in self.fields:
-                self.fields["subcategory"].required = True
+                self.fields["subcategory"].required = False
+            if "category" in self.fields:
+                self.fields["category"].required = False
 
 
 
@@ -226,14 +244,18 @@ class BlogPage(HeadlessPreviewMixin, Page):
         if self.is_child_blog_page():
             self.category = None
             self.subcategory = None
-        elif self.subcategory:
+        else:
+            if not self.subcategory:
+                self.subcategory = get_default_uncategorized_subcategory()
             self.category = self.subcategory.category
 
     def save(self, *args, **kwargs):
         if self.is_child_blog_page():
             self.category = None
             self.subcategory = None
-        elif self.subcategory:
+        else:
+            if not self.subcategory:
+                self.subcategory = get_default_uncategorized_subcategory()
             self.category = self.subcategory.category
         super().save(*args, **kwargs)
 
@@ -381,6 +403,13 @@ class BlogComment(models.Model):
         default=STATUS_PENDING,
     )
 
+    device_id = models.CharField(
+        max_length=255,
+        blank=True,
+        null=True,
+        db_index=True,
+    )
+
     created_at = models.DateTimeField(
         auto_now_add=True,
     )
@@ -391,6 +420,7 @@ class BlogComment(models.Model):
         FieldPanel("email"),
         FieldPanel("message"),
         FieldPanel("parent"),
+        FieldPanel("device_id"),
         FieldPanel("status"),
     ]
 
@@ -407,9 +437,9 @@ class BlogCommentViewSet(SnippetViewSet):
     model = BlogComment
     menu_label = "Blog Comments"
     icon = "comment" # pyrefly: ignore[bad-override]
-    list_display = ["name", "email", "blog", "status", "created_at"]
+    list_display = ["name", "email", "blog", "device_id", "status", "created_at"]
     list_filter = ["status", "created_at"]
-    search_fields = ["name", "email", "message"]
+    search_fields = ["name", "email", "message", "device_id"]
 
 
 register_snippet(BlogCommentViewSet)

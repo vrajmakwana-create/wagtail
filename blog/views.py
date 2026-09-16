@@ -142,7 +142,12 @@ class CategoryListAPIView(APIView):
 
     def get(self, request):
 
-        categories = BlogCategory.objects.prefetch_related("subcategories").all()  # type: ignore[bad-override]
+        categories = (
+            BlogCategory.objects
+            .prefetch_related("subcategories")
+            .exclude(slug="uncategorized")
+            .all()
+        )  # type: ignore[bad-override]
 
         serializer = CategorySerializer(
             categories,
@@ -159,7 +164,12 @@ class SubCategoryListAPIView(APIView):
 
     def get(self, request):
 
-        subcategories = BlogSubCategory.objects.select_related("category").all()  # type: ignore[bad-override]
+        subcategories = (
+            BlogSubCategory.objects
+            .select_related("category")
+            .exclude(slug="uncategorized")
+            .all()
+        )  # type: ignore[bad-override]
 
         category = request.query_params.get("category")
         if category:
@@ -226,12 +236,18 @@ class BlogCommentListCreateAPIView(APIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
+        device_id = request.query_params.get("device_id")
+        if device_id:
+            status_filter = Q(status=BlogComment.STATUS_APPROVED) | Q(
+                status=BlogComment.STATUS_PENDING, device_id=device_id
+            )
+        else:
+            status_filter = Q(status=BlogComment.STATUS_APPROVED)
+
         top_level_comments = (
             BlogComment.objects
             .filter(
-                blog=blog,
-                parent__isnull=True,
-                status=BlogComment.STATUS_APPROVED,
+                Q(blog=blog, parent__isnull=True) & status_filter
             )
             .order_by("-created_at")
         )

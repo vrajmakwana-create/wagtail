@@ -218,6 +218,12 @@ class BlogCommentCreateSerializer(serializers.ModelSerializer):
         required=False,
         allow_null=True,
     )
+    device_id = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        allow_null=True,
+        max_length=255,
+    )
 
     class Meta:
         model = BlogComment
@@ -226,6 +232,7 @@ class BlogCommentCreateSerializer(serializers.ModelSerializer):
             "email",
             "message",
             "parent",
+            "device_id",
         ]
 
     def validate_parent(self, value):
@@ -249,14 +256,26 @@ class BlogCommentSerializer(serializers.ModelSerializer):
             "email",
             "message",
             "parent",
+            "device_id",
             "status",
             "created_at",
             "replies",
         ]
 
     def get_replies(self, obj):
-        approved_replies = obj.replies.filter(status=BlogComment.STATUS_APPROVED).order_by("created_at")
-        return BlogCommentSerializer(approved_replies, many=True, context=self.context).data
+        from django.db.models import Q
+        request = self.context.get("request") if self.context else None
+        device_id = request.query_params.get("device_id") if request else None
+
+        if device_id:
+            reply_filter = Q(status=BlogComment.STATUS_APPROVED) | Q(
+                status=BlogComment.STATUS_PENDING, device_id=device_id
+            )
+        else:
+            reply_filter = Q(status=BlogComment.STATUS_APPROVED)
+
+        replies = obj.replies.filter(reply_filter).order_by("created_at")
+        return BlogCommentSerializer(replies, many=True, context=self.context).data
 
 
 class BlogListSerializer(serializers.ModelSerializer):
