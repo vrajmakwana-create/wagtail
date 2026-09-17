@@ -32,7 +32,6 @@ def publish_scheduled_blogs():
             blog.publish(latest_rev, skip_permission_checks=True)
 
             msg = f"[APScheduler] Automatically published blog '{blog.title}' (ID: {blog.id}) because current time ({now.strftime('%d %b %Y %H:%M:%S')}) reached published_date ({blog.published_date.strftime('%d %b %Y %H:%M:%S')})."
-            print(msg)
             logger.info(msg)
 
     except Exception:
@@ -53,4 +52,3 @@ def start_scheduler():
     )
 
     scheduler.start()
-    print("[APScheduler] Background scheduler started (checking every 10s).")

@@ -83,7 +83,6 @@ class UserProfile(models.Model):
                         self.profile_image_url = s3_url
                         super().save(update_fields=["profile_image_url"])
                 except Exception as e:
-                    print(f"S3 Upload notice: {e}")
                     if self.profile_image and hasattr(self.profile_image, "url"):
                         url = self.profile_image.url
                         if self.profile_image_url != url:
