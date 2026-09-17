@@ -443,6 +443,38 @@ class BlogCommentsAndLikesTestCase(TestCase):
         self.assertEqual(blog_page.category.slug, "uncategorized")
         self.assertEqual(blog_page.subcategory.slug, "uncategorized")
 
+    def test_published_date_future_date_validation(self):
+        from django.utils import timezone
+        from datetime import timedelta
+        from django.core.exceptions import ValidationError
+        from wagtail.models import Page
+
+        root_page = Page.get_first_root_node()
+
+        # Past date should raise ValidationError
+        past_date = timezone.now() - timedelta(days=1)
+        blog_page_past = BlogPage(
+            title="Past Date Blog",
+            slug="past-date-blog",
+            published_date=past_date,
+        )
+        with self.assertRaises(ValidationError) as cm:
+            blog_page_past.clean()
+        self.assertIn("published_date", cm.exception.message_dict)
+
+        # Future date should pass clean validation
+        future_date = timezone.now() + timedelta(days=5)
+        blog_page_future = BlogPage(
+            title="Future Date Blog",
+            slug="future-date-blog",
+            published_date=future_date,
+        )
+        try:
+            blog_page_future.clean()
+        except ValidationError:
+            self.fail("clean() raised ValidationError unexpectedly for future published_date!")
+
+
 
 
 

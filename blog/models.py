@@ -7,6 +7,7 @@ from wagtail.models import Page
 from wagtail.fields import StreamField
 from wagtail.admin.panels import FieldPanel
 from wagtail.admin.forms import WagtailAdminPageForm
+from wagtail.admin.widgets import AdminDateTimeInput
 from wagtail.images import get_image_model_string
 from wagtail.snippets.models import register_snippet
 from wagtail.snippets.views.snippets import SnippetViewSet
@@ -19,6 +20,16 @@ from typing import cast
 
 
 from django.core.exceptions import ValidationError
+
+
+class FutureAdminDateTimeInput(AdminDateTimeInput):
+    """
+    Custom DateTime picker widget that disables past dates in the Wagtail Admin UI picker.
+    """
+    def get_config(self):
+        config = super().get_config()
+        config["minDate"] = 0  # Disables past dates in the calendar picker
+        return config
 
 
 def generate_uuid_str():
@@ -252,6 +263,18 @@ class BlogPage(HeadlessPreviewMixin, Page):
                 self.subcategory = get_default_uncategorized_subcategory()
             self.category = self.subcategory.category
 
+        if self.published_date and self.published_date <= timezone.now():
+            if not self.pk or not self.first_published_at:
+                raise ValidationError(
+                    {"published_date": "Publish date must be a future date and time."}
+                )
+            else:
+                orig = BlogPage.objects.filter(pk=self.pk).values("published_date").first()
+                if orig and orig["published_date"] != self.published_date:
+                    raise ValidationError(
+                        {"published_date": "Publish date must be a future date and time."}
+                    )
+
     def save(self, *args, **kwargs):
         if self.is_child_blog_page():
             self.category = None
@@ -279,7 +302,7 @@ class BlogPage(HeadlessPreviewMixin, Page):
         FieldPanel("short_description"),
         FieldPanel("featured_image"),
         FieldPanel("body"),
-        FieldPanel("published_date"),
+        FieldPanel("published_date", widget=FutureAdminDateTimeInput()),
         FieldPanel("subcategory"),
     ]
 
