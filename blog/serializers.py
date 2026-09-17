@@ -3,6 +3,7 @@ from rest_framework import serializers
 from .models import BlogPage, BlogCategory, BlogSubCategory, BlogComment, BlogLike
 from wagtail.rich_text import RichText
 from wagtail.images import get_image_model
+from wagtail.embeds.blocks import EmbedValue
 
 
 WagtailImage = get_image_model()
@@ -17,6 +18,10 @@ class SubCategorySerializer(serializers.ModelSerializer):
             "id",
             "name",
             "slug",
+            "description",
+            "focus_keyphrase",
+            "seo_title",
+            "meta_description"
         ]
 
 
@@ -62,6 +67,9 @@ class CategorySerializer(serializers.ModelSerializer):
             "name",
             "slug",
             "description",
+            "focus_keyphrase",
+            "seo_title",
+            "meta_description", 
             "subcategories",
         ]
 
@@ -123,6 +131,13 @@ class StreamFieldSerializer(serializers.Field):
         # RichText -> HTML string
         if isinstance(value, RichText):
             return str(value)
+
+        # Wagtail EmbedValue -> dict with url and iframe html
+        if isinstance(value, EmbedValue):
+            return {
+                "url": value.url,
+                "html": str(value.html) if getattr(value, "html", None) else "",
+            }
 
         # StreamValue / StreamChild
         if hasattr(value, "block_type") and hasattr(value, "value"):
@@ -286,6 +301,7 @@ class BlogListSerializer(serializers.ModelSerializer):
     social_image = ImageSerializer(read_only=True)
     children = serializers.SerializerMethodField()
     author = serializers.SerializerMethodField()
+    body = StreamFieldSerializer()
 
     seo_title = serializers.SerializerMethodField()
     seo_description = serializers.SerializerMethodField()
@@ -302,6 +318,7 @@ class BlogListSerializer(serializers.ModelSerializer):
             "short_description",
             "category",
             "subcategory",
+            "body",
             "children",
             "featured_image",
             "author",
