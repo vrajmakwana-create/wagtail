@@ -474,6 +474,37 @@ class BlogCommentsAndLikesTestCase(TestCase):
         except ValidationError:
             self.fail("clean() raised ValidationError unexpectedly for future published_date!")
 
+    def test_scheduled_publishing_with_past_published_date(self):
+        from django.utils import timezone
+        from datetime import timedelta
+        from core.scheduler import publish_scheduled_blogs
+        from wagtail.models import Page
+
+        now = timezone.now()
+        past_date = now - timedelta(minutes=5)
+
+        root_page = Page.get_first_root_node()
+
+        blog_page = BlogPage(
+            title="Scheduled Blog Page",
+            slug="scheduled-blog-page",
+            published_date=past_date,
+            go_live_at=past_date,
+            live=False,
+        )
+        root_page.add_child(instance=blog_page)
+        BlogPage.objects.filter(pk=blog_page.pk).update(published_date=past_date, go_live_at=past_date)
+        blog_page.save_revision(approved_go_live_at=past_date)
+
+        try:
+            publish_scheduled_blogs()
+        except Exception as e:
+            self.fail(f"publish_scheduled_blogs raised an exception: {e}")
+
+        blog_page.refresh_from_db()
+        self.assertTrue(blog_page.live)
+
+
 
 
 

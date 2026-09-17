@@ -264,16 +264,20 @@ class BlogPage(HeadlessPreviewMixin, Page):
             self.category = self.subcategory.category
 
         if self.published_date and self.published_date <= timezone.now():
-            if not self.pk or not self.first_published_at:
-                raise ValidationError(
-                    {"published_date": "Publish date must be a future date and time."}
-                )
-            else:
-                orig = BlogPage.objects.filter(pk=self.pk).values("published_date").first()
-                if orig and orig["published_date"] != self.published_date:
+            if self.first_published_at:
+                pass
+            elif self.pk:
+                orig = BlogPage.objects.filter(pk=self.pk).values("published_date", "go_live_at").first()
+                if orig and (orig["published_date"] == self.published_date or orig["go_live_at"] == self.published_date):
+                    pass
+                else:
                     raise ValidationError(
                         {"published_date": "Publish date must be a future date and time."}
                     )
+            else:
+                raise ValidationError(
+                    {"published_date": "Publish date must be a future date and time."}
+                )
 
     def save(self, *args, **kwargs):
         if self.is_child_blog_page():
