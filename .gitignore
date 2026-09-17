@@ -98,3 +98,4 @@ dist/
 # Python packaging
 # ==========================
 pip-wheel-metadata/
+wordpress.sql

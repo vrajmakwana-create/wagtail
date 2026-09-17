@@ -23,6 +23,7 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    "django.contrib.postgres",
 
     # Wagtail
     "wagtail",
@@ -32,7 +33,7 @@ INSTALLED_APPS = [
     "wagtail.snippets",
     "wagtail.contrib.table_block",
 
-     # Third-party apps
+    # Third-party apps
     'taggit',
     'wagtail.contrib.settings',
     'wagtail.contrib.forms',
