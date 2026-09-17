@@ -1,6 +1,7 @@
 import uuid
 from django import forms
 from django.db import models
+from django.utils import timezone
 
 from wagtail.models import Page
 from wagtail.fields import StreamField
@@ -218,6 +219,8 @@ class BlogPage(HeadlessPreviewMixin, Page):
         APIField("featured_image"),
         APIField("body"),
         APIField("published_date"),
+        APIField("go_live_at"),
+        APIField("expire_at"),
         APIField("author"),
         APIField("focus_keyphrase"),
         APIField("custom_meta_title"),
@@ -257,7 +260,20 @@ class BlogPage(HeadlessPreviewMixin, Page):
             if not self.subcategory:
                 self.subcategory = get_default_uncategorized_subcategory()
             self.category = self.subcategory.category
+
+        if self.published_date:
+            self.go_live_at = self.published_date
+        elif self.go_live_at:
+            self.published_date = self.go_live_at
+
         super().save(*args, **kwargs)
+
+    def save_revision(self, *args, **kwargs):
+        if self.published_date and not kwargs.get("approved_go_live_at"):
+            if self.published_date > timezone.now():
+                kwargs["approved_go_live_at"] = self.published_date
+
+        return super().save_revision(*args, **kwargs)
 
     content_panels = Page.content_panels + [  # type: ignore[bad-override]
         FieldPanel("short_description"),
@@ -307,10 +323,31 @@ class BlogCategory(models.Model):
         help_text="Category description",
     )
 
+    focus_keyphrase = models.CharField(
+        max_length=100,
+        blank=True,
+        help_text="Primary keyword/phrase for search engines",
+    )
+
+    seo_title = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="Custom SEO Meta Title (defaults to page title if blank)",
+    )
+
+    meta_description = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="Custom SEO Meta Description (defaults to page description if blank)",
+    )
+
     panels = [
         FieldPanel("name"),
         FieldPanel("slug"),
         FieldPanel("description"),
+        FieldPanel("focus_keyphrase"),
+        FieldPanel("seo_title"),
+        FieldPanel("meta_description")  
     ]
 
     def __str__(self):  # type: ignore[bad-override]
@@ -342,10 +379,37 @@ class BlogSubCategory(models.Model):
         unique=True,
     )
 
+    description = models.TextField(
+        blank=True,
+        help_text="Category description",
+    )
+
+    focus_keyphrase = models.CharField(
+        max_length=100,
+        blank=True,
+        help_text="Primary keyword/phrase for search engines",
+    )
+
+    seo_title = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="Custom SEO Meta Title (defaults to page title if blank)",
+    )
+
+    meta_description = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="Custom SEO Meta Description (defaults to page description if blank)",
+    )
+
     panels = [
         FieldPanel("category"),
         FieldPanel("name"),
         FieldPanel("slug"),
+        FieldPanel("description"),
+        FieldPanel("focus_keyphrase"),
+        FieldPanel("seo_title"),
+        FieldPanel("meta_description")
     ]
 
     class Meta:
