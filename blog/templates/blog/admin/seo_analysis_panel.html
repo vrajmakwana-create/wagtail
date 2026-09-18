@@ -1,0 +1,233 @@
+<div class="seo-analysis-container panel" id="seo-analysis-panel-root" style="background: #ffffff; border: 1px solid #dcdcdc; border-radius: 8px; padding: 20px; margin-top: 15px; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; border-bottom: 2px solid #eaeaea; padding-bottom: 12px;">
+        <h3 style="margin: 0; font-size: 1.2rem; font-weight: 700; color: #222; display: flex; align-items: center; gap: 8px;">
+            <span style="font-size: 1.3rem;">🔍</span> <span>SEO & Readability Live Analysis</span>
+        </h3>
+        <button type="button" id="btn-refresh-seo-analysis" class="button button-small button-secondary" style="display: flex; align-items: center; gap: 6px; cursor: pointer; padding: 6px 12px; border-radius: 4px; font-weight: 600;">
+            <span id="seo-refresh-icon">🔄</span> <span id="seo-refresh-text">Refresh Analysis</span>
+        </button>
+    </div>
+
+    <!-- Score Gauges / Summary Cards -->
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px;">
+        <!-- SEO Score Card -->
+        <div id="seo-score-card" style="background: #f8f9fa; border-radius: 8px; padding: 16px; border-left: 6px solid {% if seo_report and seo_report.score >= 80 %}#2e7d32{% elif seo_report and seo_report.score >= 50 %}#f57f17{% else %}#c62828{% endif %}; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+            <div style="font-size: 0.85em; color: #555; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">SEO Score</div>
+            <div style="font-size: 2.2em; font-weight: 800; margin: 6px 0; color: #111;">
+                <span id="seo-score-value">{% if seo_report %}{{ seo_report.score }}%{% else %}0%{% endif %}</span>
+            </div>
+            <div style="font-size: 0.85em; color: #555;">
+                Passed: <strong id="seo-passed-count">{% if seo_report %}{{ seo_report.passed_count }}{% else %}0{% endif %}</strong> / <span id="seo-total-count">{% if seo_report %}{{ seo_report.total_count }}{% else %}0{% endif %}</span> checks
+            </div>
+        </div>
+
+        <!-- Readability Score Card -->
+        <div id="readability-score-card" style="background: #f8f9fa; border-radius: 8px; padding: 16px; border-left: 6px solid {% if readability_report and readability_report.score >= 80 %}#2e7d32{% elif readability_report and readability_report.score >= 50 %}#f57f17{% else %}#c62828{% endif %}; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+            <div style="font-size: 0.85em; color: #555; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">Readability Score</div>
+            <div style="font-size: 2.2em; font-weight: 800; margin: 6px 0; color: #111;">
+                <span id="readability-score-value">{% if readability_report %}{{ readability_report.score }}%{% else %}0%{% endif %}</span>
+            </div>
+            <div style="font-size: 0.85em; color: #555;">
+                Passed: <strong id="readability-passed-count">{% if readability_report %}{{ readability_report.passed_count }}{% else %}0{% endif %}</strong> / <span id="readability-total-count">{% if readability_report %}{{ readability_report.total_count }}{% else %}0{% endif %}</span> checks
+            </div>
+        </div>
+    </div>
+
+    <!-- Detailed Check Lists -->
+    <div>
+        <h4 style="margin: 15px 0 10px 0; font-size: 1rem; font-weight: 700; color: #333; border-bottom: 1px solid #eee; padding-bottom: 6px;">
+            SEO Diagnostics
+        </h4>
+        <ul id="seo-tests-list" style="list-style: none; padding-left: 0; margin: 0 0 20px 0;">
+            {% if seo_report and seo_report.tests %}
+                {% for test in seo_report.tests %}
+                    <li style="padding: 10px 14px; margin-bottom: 8px; border-radius: 6px; background: {% if test.status == 'pass' %}#e8f5e9{% elif test.status == 'warning' %}#fff8e1{% else %}#ffebee{% endif %}; border-left: 4px solid {% if test.status == 'pass' %}#2e7d32{% elif test.status == 'warning' %}#f57f17{% else %}#c62828{% endif %}; display: flex; justify-content: space-between; align-items: center; gap: 10px;">
+                        <div>
+                            <strong style="color: #222;">{{ test.title }}:</strong> <span style="font-size: 0.9em; color: #444;">{{ test.message }}</span>
+                        </div>
+                        <span style="font-size: 0.75em; padding: 3px 9px; border-radius: 12px; font-weight: 700; color: white; text-transform: uppercase; background: {% if test.status == 'pass' %}#2e7d32{% elif test.status == 'warning' %}#f57f17{% else %}#c62828{% endif %}; flex-shrink: 0;">
+                            {{ test.status }}
+                        </span>
+                    </li>
+                {% endfor %}
+            {% else %}
+                <li style="color: #666; font-style: italic; padding: 8px;">Fill form details or click "Refresh Analysis" to view live report.</li>
+            {% endif %}
+        </ul>
+
+        <h4 style="margin: 15px 0 10px 0; font-size: 1rem; font-weight: 700; color: #333; border-bottom: 1px solid #eee; padding-bottom: 6px;">
+            Readability Diagnostics
+        </h4>
+        <ul id="readability-tests-list" style="list-style: none; padding-left: 0; margin: 0;">
+            {% if readability_report and readability_report.tests %}
+                {% for test in readability_report.tests %}
+                    <li style="padding: 10px 14px; margin-bottom: 8px; border-radius: 6px; background: {% if test.status == 'pass' %}#e8f5e9{% elif test.status == 'warning' %}#fff8e1{% else %}#ffebee{% endif %}; border-left: 4px solid {% if test.status == 'pass' %}#2e7d32{% elif test.status == 'warning' %}#f57f17{% else %}#c62828{% endif %}; display: flex; justify-content: space-between; align-items: center; gap: 10px;">
+                        <div>
+                            <strong style="color: #222;">{{ test.title }}:</strong> <span style="font-size: 0.9em; color: #444;">{{ test.message }}</span>
+                        </div>
+                        <span style="font-size: 0.75em; padding: 3px 9px; border-radius: 12px; font-weight: 700; color: white; text-transform: uppercase; background: {% if test.status == 'pass' %}#2e7d32{% elif test.status == 'warning' %}#f57f17{% else %}#c62828{% endif %}; flex-shrink: 0;">
+                            {{ test.status }}
+                        </span>
+                    </li>
+                {% endfor %}
+            {% else %}
+                <li style="color: #666; font-style: italic; padding: 8px;">Fill form details or click "Refresh Analysis" to view live report.</li>
+            {% endif %}
+        </ul>
+    </div>
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    const btnRefresh = document.getElementById("btn-refresh-seo-analysis");
+    if (!btnRefresh) return;
+
+    function getFormValue(name) {
+        const el = document.querySelector(`input[name="${name}"], textarea[name="${name}"]`);
+        return el ? el.value.trim() : "";
+    }
+
+    function extractBodyHTMLAndImages() {
+        let htmlParts = [];
+        const processedAltTexts = new Set();
+
+        // 1. Extract alt_text & image inputs from StreamField image blocks
+        const altInputs = document.querySelectorAll('#id_body input[name*="alt"], [data-streamfield-stream-container] input[name*="alt"], .w-field--stream_field input[name*="alt"]');
+        altInputs.forEach(input => {
+            const altVal = input.value ? input.value.trim() : "";
+            processedAltTexts.add(altVal);
+            htmlParts.push(`<img src="block_image" alt="${altVal}" />`);
+        });
+
+        // 2. Extract DOM <img> elements from Draftail rich text inline images (skipping already processed StreamField block alt inputs)
+        const domImgs = document.querySelectorAll('.DraftEditor-root img, [contenteditable="true"] img');
+        domImgs.forEach(img => {
+            const alt = img.getAttribute("alt") || img.getAttribute("title") || "";
+            if (!processedAltTexts.has(alt)) {
+                htmlParts.push(`<img src="${img.src || '#'}" alt="${alt}" />`);
+            }
+        });
+
+        // 3. Extract text content from StreamField text inputs & textareas
+        const inputs = document.querySelectorAll('#id_body input, #id_body textarea, [data-streamfield-stream-container] textarea, [data-streamfield-stream-container] input, .w-field--stream_field textarea, .w-field--stream_field input');
+        inputs.forEach(el => {
+            if (el.value && !el.name.includes("alt") && !el.name.includes("image")) {
+                htmlParts.push(`<p>${el.value}</p>`);
+            }
+        });
+
+        // 4. Fallback: contenteditable rich text elements
+        const editables = document.querySelectorAll('.DraftEditor-root, [contenteditable="true"]');
+        editables.forEach(el => {
+            if (el.innerText) htmlParts.push(`<p>${el.innerText}</p>`);
+        });
+
+        return htmlParts.join(" ");
+    }
+
+    function renderTestList(containerId, tests) {
+        const container = document.getElementById(containerId);
+        if (!container) return;
+
+        if (!tests || tests.length === 0) {
+            container.innerHTML = '<li style="color: #666; font-style: italic; padding: 8px;">No checks available.</li>';
+            return;
+        }
+
+        container.innerHTML = tests.map(test => {
+            let bg = "#ffebee", border = "#c62828";
+            if (test.status === "pass") {
+                bg = "#e8f5e9"; border = "#2e7d32";
+            } else if (test.status === "warning") {
+                bg = "#fff8e1"; border = "#f57f17";
+            }
+            return `
+                <li style="padding: 10px 14px; margin-bottom: 8px; border-radius: 6px; background: ${bg}; border-left: 4px solid ${border}; display: flex; justify-content: space-between; align-items: center; gap: 10px;">
+                    <div>
+                        <strong style="color: #222;">${test.title}:</strong> <span style="font-size: 0.9em; color: #444;">${test.message}</span>
+                    </div>
+                    <span style="font-size: 0.75em; padding: 3px 9px; border-radius: 12px; font-weight: 700; color: white; text-transform: uppercase; background: ${border}; flex-shrink: 0;">
+                        ${test.status}
+                    </span>
+                </li>
+            `;
+        }).join("");
+    }
+
+    function runAnalysis() {
+        const payload = {
+            title: getFormValue("title"),
+            slug: getFormValue("slug"),
+            focus_keyphrase: getFormValue("focus_keyphrase"),
+            keyphrase_synonyms: getFormValue("keyphrase_synonyms"),
+            custom_meta_title: getFormValue("custom_meta_title"),
+            custom_meta_description: getFormValue("custom_meta_description"),
+            short_description: getFormValue("short_description"),
+            canonical_url: getFormValue("canonical_url"),
+            featured_image: getFormValue("featured_image"),
+            featured_image_alt: getFormValue("featured_image_alt"),
+            body_html: extractBodyHTMLAndImages()
+        };
+
+        const refreshIcon = document.getElementById("seo-refresh-icon");
+        if (refreshIcon) refreshIcon.style.transform = "rotate(180deg)";
+
+        fetch("/admin/blog/seo-analysis-preview/", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify(payload)
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                // Update SEO Score
+                const seoScoreVal = document.getElementById("seo-score-value");
+                const seoPassed = document.getElementById("seo-passed-count");
+                const seoTotal = document.getElementById("seo-total-count");
+                const seoCard = document.getElementById("seo-score-card");
+
+                if (seoScoreVal) seoScoreVal.innerText = `${data.seo_report.score}%`;
+                if (seoPassed) seoPassed.innerText = data.seo_report.passed_count;
+                if (seoTotal) seoTotal.innerText = data.seo_report.total_count;
+
+                if (seoCard) {
+                    const color = data.seo_report.score >= 80 ? "#2e7d32" : (data.seo_report.score >= 50 ? "#f57f17" : "#c62828");
+                    seoCard.style.borderLeftColor = color;
+                }
+
+                renderTestList("seo-tests-list", data.seo_report.tests);
+
+                // Update Readability Score
+                const readScoreVal = document.getElementById("readability-score-value");
+                const readPassed = document.getElementById("readability-passed-count");
+                const readTotal = document.getElementById("readability-total-count");
+                const readCard = document.getElementById("readability-score-card");
+
+                if (readScoreVal) readScoreVal.innerText = `${data.readability_report.score}%`;
+                if (readPassed) readPassed.innerText = data.readability_report.passed_count;
+                if (readTotal) readTotal.innerText = data.readability_report.total_count;
+
+                if (readCard) {
+                    const color = data.readability_report.score >= 80 ? "#2e7d32" : (data.readability_report.score >= 50 ? "#f57f17" : "#c62828");
+                    readCard.style.borderLeftColor = color;
+                }
+
+                renderTestList("readability-tests-list", data.readability_report.tests);
+            }
+        })
+        .catch(err => {
+            console.error("SEO analysis preview error:", err);
+        })
+        .finally(() => {
+            if (refreshIcon) refreshIcon.style.transform = "none";
+        });
+    }
+
+    btnRefresh.addEventListener("click", runAnalysis);
+
+    // Initial run after form loads
+    setTimeout(runAnalysis, 1000);
+});
+</script>

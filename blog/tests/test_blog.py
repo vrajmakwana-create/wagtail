@@ -1,4 +1,5 @@
-from django.test import TestCase
+import json
+from django.test import TestCase, Client
 from rest_framework.test import APIClient
 from blog.models import BlogPage, BlogCategory, BlogSubCategory
 from blog.seo_analyzer import BlogSEOAnalyzer
@@ -503,6 +504,55 @@ class BlogCommentsAndLikesTestCase(TestCase):
 
         blog_page.refresh_from_db()
         self.assertTrue(blog_page.live)
+
+
+class SEOAnalysisAdminTestCase(TestCase):
+
+    def setUp(self):
+        self.client = Client()
+        self.page = BlogPage(
+            title="Admin SEO Analysis Test Page",
+            slug="admin-seo-test-page",
+            short_description="Testing SEO admin panel integration in Wagtail.",
+            focus_keyphrase="SEO admin panel",
+            keyphrase_synonyms="SEO analysis, Wagtail admin SEO",
+            author="Tester",
+            body=[
+                ("heading", {"text": "Wagtail Admin SEO", "level": "h2"}),
+                ("paragraph", "<p>This is a test paragraph for SEO admin panel evaluation.</p>")
+            ]
+        )
+
+    def test_seo_analysis_panel_context(self):
+        from blog.panels import SEOAnalysisPanel
+        panel = SEOAnalysisPanel()
+        bound_panel = panel.get_bound_panel(instance=self.page)
+        context = bound_panel.get_context_data({})
+
+        self.assertIn("seo_report", context)
+        self.assertIn("readability_report", context)
+        self.assertIsNotNone(context["seo_report"])
+        self.assertIsNotNone(context["readability_report"])
+
+    def test_seo_analysis_preview_endpoint(self):
+        url = "/admin/blog/seo-analysis-preview/"
+        payload = {
+            "title": "Comprehensive Guide to Wagtail SEO",
+            "slug": "guide-wagtail-seo",
+            "focus_keyphrase": "Wagtail SEO",
+            "custom_meta_description": "Learn Wagtail SEO optimization techniques.",
+            "body_html": "<h2>Wagtail SEO Overview</h2><p>Wagtail SEO helps improve search rankings. Additionally, structured content makes SEO easier.</p>"
+        }
+
+        response = self.client.post(url, data=json.dumps(payload), content_type="application/json")
+        self.assertEqual(response.status_code, 200)
+
+        data = response.json()
+        self.assertTrue(data["success"])
+        self.assertIn("seo_report", data)
+        self.assertIn("readability_report", data)
+        self.assertGreater(data["seo_report"]["score"], 0)
+
 
 
 

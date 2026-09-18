@@ -13,6 +13,7 @@ from wagtail.snippets.models import register_snippet
 from wagtail.snippets.views.snippets import SnippetViewSet
 
 from .blocks import BlogStreamBlock
+from .panels import SEOAnalysisPanel
 from wagtail_headless_preview.models import HeadlessPreviewMixin
 from wagtail.api import APIField
 from wagtail.fields import RichTextField
@@ -199,10 +200,18 @@ class BlogPage(HeadlessPreviewMixin, Page):
         analyzer = BlogSEOAnalyzer(self)
         return analyzer.run_seo_analysis()
 
+    @property
+    def seo_report(self):
+        return self.get_seo_report()
+
     def get_readability_report(self):
         from .seo_analyzer import BlogSEOAnalyzer
         analyzer = BlogSEOAnalyzer(self)
         return analyzer.run_readability_analysis()
+
+    @property
+    def readability_report(self):
+        return self.get_readability_report()
 
     def get_json_ld_schema(self):
         return {
@@ -220,6 +229,10 @@ class BlogPage(HeadlessPreviewMixin, Page):
                 "@id": self.full_url or self.url or "",
             }
         }
+
+    @property
+    def json_ld_schema(self):
+        return self.get_json_ld_schema()
 
     # Fields exposed to Wagtail API
     api_fields = [
@@ -288,14 +301,23 @@ class BlogPage(HeadlessPreviewMixin, Page):
                 self.subcategory = get_default_uncategorized_subcategory()
             self.category = self.subcategory.category
 
-        if self.published_date:
+        if not self.published_date:
+            if self.go_live_at:
+                self.published_date = self.go_live_at
+            elif self.first_published_at:
+                self.published_date = self.first_published_at
+            else:
+                self.published_date = timezone.now()
+
+        if self.published_date and not self.go_live_at:
             self.go_live_at = self.published_date
-        elif self.go_live_at:
-            self.published_date = self.go_live_at
 
         super().save(*args, **kwargs)
 
     def save_revision(self, *args, **kwargs):
+        if not self.published_date:
+            self.published_date = timezone.now()
+
         if self.published_date and not kwargs.get("approved_go_live_at"):
             if self.published_date > timezone.now():
                 kwargs["approved_go_live_at"] = self.published_date
@@ -315,6 +337,7 @@ class BlogPage(HeadlessPreviewMixin, Page):
     promote_panels = Page.promote_panels + [  # type: ignore[bad-override]
         FieldPanel("focus_keyphrase"),
         FieldPanel("keyphrase_synonyms"),
+        SEOAnalysisPanel(),
         FieldPanel("canonical_url"),
         FieldPanel("is_cornerstone"),
         FieldPanel("robots_index"),

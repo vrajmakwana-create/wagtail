@@ -231,15 +231,24 @@ CORS_ALLOWED_ORIGINS = [
     "http://127.0.0.1:5173",
     "http://localhost:3000",
     "http://127.0.0.1:3000",
+    "http://192.168.29.180:5173",
+    "http://192.168.29.180:3000",
+    "https://pelvis-shone-refold.ngrok-free.dev"
 ]
+
+# Disable COOP header restriction for cross-origin preview popups in local development
+SECURE_CROSS_ORIGIN_OPENER_POLICY = None
 
 WAGTAIL_HEADLESS_PREVIEW = {
     "CLIENT_URLS": {
-        "default": "http://localhost:5173/preview",
+        "default": "http://192.168.29.141:3000/blog/preview",
     },
-    "SERVE_BASE_URL": "http://localhost:5173",
+    "SERVE_BASE_URL": "http://localhost:8000",
 }
 
 CSRF_TRUSTED_ORIGINS = [
+    "http://localhost:8000",
+    "http://127.0.0.1:8000",
+    "http://192.168.29.180:8000",
     "https://pelvis-shone-refold.ngrok-free.dev",
 ]

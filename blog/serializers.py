@@ -361,6 +361,22 @@ class BlogListSerializer(serializers.ModelSerializer):
             many=True
         ).data
 
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        if instance.category:
+            cat_slug = getattr(instance.category, "slug", "") or ""
+            cat_name = getattr(instance.category, "name", "") or ""
+            if cat_slug.lower() == "uncategorized" or cat_name.lower() == "uncategorized":
+                data["category"] = None
+
+        if instance.subcategory:
+            subcat_slug = getattr(instance.subcategory, "slug", "") or ""
+            subcat_name = getattr(instance.subcategory, "name", "") or ""
+            if subcat_slug.lower() == "uncategorized" or subcat_name.lower() == "uncategorized":
+                data["subcategory"] = None
+
+        return data
+
 
 class BlogDetailSerializer(serializers.ModelSerializer):
 
@@ -401,17 +417,32 @@ class BlogDetailSerializer(serializers.ModelSerializer):
         return get_author_details(obj, self.context)
 
     def get_likes_count(self, obj):
-        return obj.likes.count()
+        if not getattr(obj, "pk", None):
+            return 0
+        try:
+            return obj.likes.count()
+        except Exception:
+            return 0
 
     def get_comments_count(self, obj):
-        return obj.comments.filter(status=BlogComment.STATUS_APPROVED).count()
+        if not getattr(obj, "pk", None):
+            return 0
+        try:
+            return obj.comments.filter(status=BlogComment.STATUS_APPROVED).count()
+        except Exception:
+            return 0
 
     def get_is_liked(self, obj):
+        if not getattr(obj, "pk", None):
+            return False
         request = self.context.get("request")
         if request:
             device_id = request.query_params.get("device_id")
             if device_id:
-                return obj.likes.filter(device_id=device_id).exists()
+                try:
+                    return obj.likes.filter(device_id=device_id).exists()
+                except Exception:
+                    return False
         return False
 
     def get_metadata(self, obj):
@@ -436,17 +467,37 @@ class BlogDetailSerializer(serializers.ModelSerializer):
         }
 
     def get_children(self, obj):
+        if not getattr(obj, "pk", None) or not getattr(obj, "id", None):
+            return []
+        try:
+            children = (
+                obj
+                .get_children()
+                .live()
+                .specific()
+            )
 
-        children = (
-            obj
-            .get_children()
-            .live()
-            .specific()
-        )
+            return BlogChildSerializer(
+                children,
+                many=True
+            ).data
+        except Exception:
+            return []
 
-        return BlogChildSerializer(
-            children,
-            many=True
-        ).data
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        if instance.category:
+            cat_slug = getattr(instance.category, "slug", "") or ""
+            cat_name = getattr(instance.category, "name", "") or ""
+            if cat_slug.lower() == "uncategorized" or cat_name.lower() == "uncategorized":
+                data["category"] = None
+
+        if instance.subcategory:
+            subcat_slug = getattr(instance.subcategory, "slug", "") or ""
+            subcat_name = getattr(instance.subcategory, "name", "") or ""
+            if subcat_slug.lower() == "uncategorized" or subcat_name.lower() == "uncategorized":
+                data["subcategory"] = None
+
+        return data
 
 

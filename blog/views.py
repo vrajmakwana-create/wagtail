@@ -34,6 +34,7 @@ class BlogListAPIView(APIView):
             .live()
             .specific()
             .select_related("category", "subcategory")
+            .filter(subcategory__isnull=False)
             .order_by("-published_date")
         )
 
@@ -42,6 +43,13 @@ class BlogListAPIView(APIView):
         subcategory = request.query_params.get("subcategory")
         search_query = request.query_params.get("search") or request.query_params.get("q")
         author = request.query_params.get("author")
+        current_blog_slug = request.query_params.get("current_blog_slug")
+
+        # Return empty result if category or subcategory is 'uncategorized'
+        if (category and str(category).strip().lower() == "uncategorized") or (
+            subcategory and str(subcategory).strip().lower() == "uncategorized"
+        ):
+            blogs = BlogPage.objects.none()
 
         # Filter by category (slug or id)
         if category:
@@ -86,6 +94,10 @@ class BlogListAPIView(APIView):
             if author.isdigit():
                 author_filter |= Q(owner__id=int(author))
             blogs = blogs.filter(author_filter).distinct()
+        
+        # Filter by current blog (slug or id)
+        if current_blog_slug:
+            blogs = blogs.exclude(Q(slug=current_blog_slug))
 
 
         # Pagination
@@ -217,6 +229,8 @@ class BlogPreviewAPIView(APIView):
             )
 
         page = page_preview.as_page()
+        if not getattr(page, "pk", None):
+            page.pk = 0
         serializer = BlogDetailSerializer(page, context={"request": request})
 
         return success_response(
