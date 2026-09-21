@@ -176,6 +176,7 @@ class StreamFieldSerializer(serializers.Field):
         return value
 
 class BlogChildSerializer(serializers.ModelSerializer):
+    children = serializers.SerializerMethodField()
 
     class Meta:
         model = BlogPage
@@ -184,7 +185,23 @@ class BlogChildSerializer(serializers.ModelSerializer):
             "id",
             "title",
             "slug",
+            "children",
         ]
+
+    def get_children(self, obj):
+        if not getattr(obj, "pk", None) or not getattr(obj, "id", None):
+            return []
+        try:
+            children = (
+                obj
+                .get_children()
+                .live()
+                .specific()
+            )
+            return BlogChildSerializer(children, many=True).data
+        except Exception:
+            return []
+
 
 def get_user_author_details(user, context=None):
     if not user:
