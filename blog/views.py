@@ -36,7 +36,7 @@ class BlogListAPIView(APIView):
             .live()
             .specific()
             .select_related("category", "subcategory")
-            .filter(subcategory__isnull=False)
+            # .filter(subcategory__isnull=False)
             .filter(
                 Q(published_date__isnull=True) | Q(published_date__lte=now)
             )

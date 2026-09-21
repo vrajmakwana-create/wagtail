@@ -75,11 +75,22 @@ class BlogPageForm(WagtailAdminPageForm):
             from django.contrib.auth import get_user_model
             User = get_user_model()
 
+            users = (
+                User.objects.filter(is_active=True)
+                .values("first_name", "last_name", "username")
+            )
+
             user_choices = []
-            for u in User.objects.all():
-                full_name = u.get_full_name()
-                display_name = full_name if full_name else u.username
-                user_choices.append((display_name, f"{display_name} ({u.username})"))
+            seen_display_names = set()
+
+            for u in users:
+                first = u["first_name"].strip()
+                last = u["last_name"].strip()
+                full_name = f"{first} {last}".strip()
+                username = u["username"]
+                display_name = full_name if full_name else username
+                user_choices.append((display_name, f"{display_name} ({username})"))
+                seen_display_names.add(display_name)
 
             try:
                 existing_authors = (
@@ -88,23 +99,27 @@ class BlogPageForm(WagtailAdminPageForm):
                     .distinct()
                 )
                 for ext in existing_authors:
-                    if ext and not any(ext == c[0] for c in user_choices):
+                    if ext and ext not in seen_display_names:
                         user_choices.append((ext, ext))
+                        seen_display_names.add(ext)
             except Exception:
                 pass
 
             user_choices = sorted(user_choices, key=lambda x: x[1].lower())
 
             default_author = ""
-            if self.instance and hasattr(self.instance, "author") and self.instance.author:
+            if self.instance and getattr(self.instance, "author", None):
                 default_author = self.instance.author
-            elif self.instance and hasattr(self.instance, "owner") and self.instance.owner:
-                default_author = self.instance.owner.get_full_name() or self.instance.owner.username
-            elif hasattr(self, "for_user") and self.for_user:
-                default_author = self.for_user.get_full_name() or self.for_user.username
+            elif self.instance and getattr(self.instance, "owner", None):
+                owner = self.instance.owner
+                default_author = owner.get_full_name() or owner.username
+            elif getattr(self, "for_user", None):
+                for_user = self.for_user
+                default_author = for_user.get_full_name() or for_user.username
 
-            if default_author and not any(default_author == c[0] for c in user_choices):
+            if default_author and default_author not in seen_display_names:
                 user_choices.insert(0, (default_author, default_author))
+                seen_display_names.add(default_author)
 
             self.fields["author"].widget = forms.Select(
                 choices=[("", "-- Select Author --")] + user_choices
