@@ -1,4 +1,5 @@
-from django.test import TestCase
+import json
+from django.test import TestCase, Client
 from rest_framework.test import APIClient
 from blog.models import BlogPage, BlogCategory, BlogSubCategory
 from blog.seo_analyzer import BlogSEOAnalyzer
@@ -443,36 +444,32 @@ class BlogCommentsAndLikesTestCase(TestCase):
         self.assertEqual(blog_page.category.slug, "uncategorized")
         self.assertEqual(blog_page.subcategory.slug, "uncategorized")
 
-    def test_published_date_future_date_validation(self):
+    def test_published_date_immediate_and_scheduled_behavior(self):
         from django.utils import timezone
         from datetime import timedelta
-        from django.core.exceptions import ValidationError
         from wagtail.models import Page
 
         root_page = Page.get_first_root_node()
 
-        # Past date should raise ValidationError
-        past_date = timezone.now() - timedelta(days=1)
-        blog_page_past = BlogPage(
-            title="Past Date Blog",
-            slug="past-date-blog",
-            published_date=past_date,
+        # 1. Empty published_date defaults to timezone.now() (immediate publish)
+        blog_immediate = BlogPage(
+            title="Immediate Blog",
+            slug="immediate-blog",
         )
-        with self.assertRaises(ValidationError) as cm:
-            blog_page_past.clean()
-        self.assertIn("published_date", cm.exception.message_dict)
+        root_page.add_child(instance=blog_immediate)
+        self.assertIsNotNone(blog_immediate.published_date)
+        self.assertLessEqual(blog_immediate.published_date, timezone.now())
 
-        # Future date should pass clean validation
+        # 2. Future date schedules post for future go_live_at
         future_date = timezone.now() + timedelta(days=5)
-        blog_page_future = BlogPage(
-            title="Future Date Blog",
-            slug="future-date-blog",
+        blog_scheduled = BlogPage(
+            title="Scheduled Blog",
+            slug="scheduled-blog",
             published_date=future_date,
         )
-        try:
-            blog_page_future.clean()
-        except ValidationError:
-            self.fail("clean() raised ValidationError unexpectedly for future published_date!")
+        root_page.add_child(instance=blog_scheduled)
+        self.assertEqual(blog_scheduled.published_date, future_date)
+        self.assertEqual(blog_scheduled.go_live_at, future_date)
 
     def test_scheduled_publishing_with_past_published_date(self):
         from django.utils import timezone
@@ -503,6 +500,109 @@ class BlogCommentsAndLikesTestCase(TestCase):
 
         blog_page.refresh_from_db()
         self.assertTrue(blog_page.live)
+
+
+class SEOAnalysisAdminTestCase(TestCase):
+
+    def setUp(self):
+        from django.contrib.auth import get_user_model
+        self.user = get_user_model().objects.create_superuser(
+            username="admin_seo", email="admin_seo@example.com", password="password"
+        )
+        self.client = Client()
+        self.client.force_login(self.user)
+        self.page = BlogPage(
+            title="Admin SEO Analysis Test Page",
+            slug="admin-seo-test-page",
+            short_description="Testing SEO admin panel integration in Wagtail.",
+            focus_keyphrase="SEO admin panel",
+            keyphrase_synonyms="SEO analysis, Wagtail admin SEO",
+            author="Tester",
+            body=[
+                ("heading", {"text": "Wagtail Admin SEO", "level": "h2"}),
+                ("paragraph", "<p>This is a test paragraph for SEO admin panel evaluation.</p>")
+            ]
+        )
+
+    def test_seo_analysis_panel_context(self):
+        from blog.panels import SEOAnalysisPanel
+        panel = SEOAnalysisPanel().bind_to_model(BlogPage)
+        bound_panel = panel.get_bound_panel(instance=self.page)
+        context = bound_panel.get_context_data({})
+
+        self.assertIn("seo_report", context)
+        self.assertIn("readability_report", context)
+        self.assertIsNotNone(context["seo_report"])
+        self.assertIsNotNone(context["readability_report"])
+
+    def test_seo_analysis_preview_endpoint(self):
+        url = "/admin/blog/seo-analysis-preview/"
+        payload = {
+            "title": "Comprehensive Guide to Wagtail SEO",
+            "slug": "guide-wagtail-seo",
+            "focus_keyphrase": "Wagtail SEO",
+            "custom_meta_description": "Learn Wagtail SEO optimization techniques.",
+            "body_html": "<h2>Wagtail SEO Overview</h2><p>Wagtail SEO helps improve search rankings. Additionally, structured content makes SEO easier.</p>"
+        }
+
+        response = self.client.post(url, data=json.dumps(payload), content_type="application/json")
+        self.assertEqual(response.status_code, 200)
+
+        data = response.json()
+        self.assertTrue(data["success"])
+        self.assertIn("seo_report", data)
+        self.assertIn("readability_report", data)
+        self.assertGreater(data["seo_report"]["score"], 0)
+
+
+class AuthorDropdownTestCase(TestCase):
+
+    def setUp(self):
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+        self.author1 = User.objects.create_user(
+            username="john_doe", first_name="John", last_name="Doe", email="john@example.com"
+        )
+        self.author2 = User.objects.create_user(
+            username="jane_smith", first_name="Jane", last_name="Smith", email="jane@example.com"
+        )
+
+    def test_blog_page_form_author_choices(self):
+        FormClass = BlogPage.get_edit_handler().get_form_class()
+        form = FormClass()
+        self.assertIn("author", form.fields)
+        widget = form.fields["author"].widget
+        from django.forms import Select
+        self.assertIsInstance(widget, Select)
+
+        choices = [choice[0] for choice in widget.choices]
+        self.assertIn("John Doe", choices)
+        self.assertIn("Jane Smith", choices)
+
+    def test_author_sync_on_save(self):
+        from wagtail.models import Page
+        root_page = Page.get_first_root_node()
+        blog = BlogPage(
+            title="Author Dropdown Test",
+            slug="author-dropdown-test",
+            owner=self.author1,
+        )
+        root_page.add_child(instance=blog)
+        self.assertEqual(blog.author, "John Doe")
+        self.assertEqual(blog.get_author_name(), "John Doe")
+
+        blog.owner = self.author2
+        blog.save()
+        self.assertEqual(blog.author, "Jane Smith")
+        self.assertEqual(blog.get_author_name(), "Jane Smith")
+
+    def test_default_author_preselected_for_user(self):
+        FormClass = BlogPage.get_edit_handler().get_form_class()
+        form = FormClass(for_user=self.author1)
+        self.assertEqual(form.initial.get("author"), "John Doe")
+
+
+
 
 
 

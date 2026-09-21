@@ -55,33 +55,44 @@ class BlogSEOAnalyzer:
         images = []
         links = []
 
-        if hasattr(self.page, "body"):
-            for block in self.page.body:
-                block_type = block.block_type
-                value = block.value
+        if hasattr(self.page, "body_html") and self.page.body_html:
+            html_chunks.append(str(self.page.body_html))
+        elif hasattr(self.page, "body"):
+            if isinstance(self.page.body, str):
+                html_chunks.append(self.page.body)
+            else:
+                try:
+                    for block in self.page.body:
+                        block_type = getattr(block, "block_type", None) or (block.get("type") if isinstance(block, dict) else None)
+                        value = getattr(block, "value", None) or (block.get("value") if isinstance(block, dict) else None)
 
-                if block_type == "heading":
-                    lvl = value.get("level", "h2")
-                    txt = value.get("text", "")
-                    html_chunks.append(f"<{lvl}>{txt}</{lvl}>")
-                elif block_type == "subheading":
-                    html_chunks.append(f"<h2>{value}</h2>")
-                elif block_type == "paragraph" or block_type == "quote":
-                    html_chunks.append(str(value))
-                elif block_type == "image" and value:
-                    if isinstance(value, dict):
-                        img_obj = value.get("image")
-                        alt = value.get("alt_text") or (getattr(img_obj, "title", "") if img_obj else "")
-                        url = getattr(img_obj, "file", "") if img_obj else ""
-                    else:
-                        alt = getattr(value, "title", "")
-                        url = getattr(value, "file", "")
-                    images.append({"alt": alt, "url": url})
-                    html_chunks.append(f'<img src="#" alt="{alt}" />')
-                elif block_type in ["bullet_list", "numbered_list"]:
-                    tag = "ul" if block_type == "bullet_list" else "ol"
-                    items = "".join([f"<li>{item}</li>" for item in value])
-                    html_chunks.append(f"<{tag}>{items}</{tag}>")
+                        if not block_type and not value:
+                            continue
+
+                        if block_type == "heading":
+                            lvl = value.get("level", "h2") if isinstance(value, dict) else "h2"
+                            txt = value.get("text", "") if isinstance(value, dict) else str(value)
+                            html_chunks.append(f"<{lvl}>{txt}</{lvl}>")
+                        elif block_type == "subheading":
+                            html_chunks.append(f"<h2>{value}</h2>")
+                        elif block_type in ["paragraph", "quote"]:
+                            html_chunks.append(str(value))
+                        elif block_type == "image" and value:
+                            if isinstance(value, dict):
+                                img_obj = value.get("image")
+                                alt = value.get("alt_text") or (getattr(img_obj, "title", "") if img_obj else "")
+                                url = getattr(img_obj, "file", "") if img_obj else ""
+                            else:
+                                alt = getattr(value, "title", "")
+                                url = getattr(value, "file", "")
+                            images.append({"alt": alt, "url": url})
+                            html_chunks.append(f'<img src="#" alt="{alt}" />')
+                        elif block_type in ["bullet_list", "numbered_list"]:
+                            tag = "ul" if block_type == "bullet_list" else "ol"
+                            items = "".join([f"<li>{item}</li>" for item in (value if isinstance(value, list) else [])])
+                            html_chunks.append(f"<{tag}>{items}</{tag}>")
+                except TypeError:
+                    html_chunks.append(str(self.page.body))
 
         if getattr(self.page, "featured_image", None):
             feat_alt = getattr(self.page.featured_image, "title", "")
@@ -89,6 +100,11 @@ class BlogSEOAnalyzer:
 
         full_html = " ".join(html_chunks)
         soup = BeautifulSoup(full_html, "html.parser")
+        for img in soup.find_all("img"):
+            img_alt = img.get("alt", "")
+            img_src = img.get("src", "")
+            if not any(i["alt"] == img_alt and i["url"] in [img_src, "block_image", "#", "featured_image"] for i in images):
+                images.append({"alt": img_alt, "url": img_src})
         for a in soup.find_all("a", href=True):
             links.append({"href": a["href"], "text": a.get_text(strip=True)})
 

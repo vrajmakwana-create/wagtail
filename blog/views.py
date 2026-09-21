@@ -1,5 +1,6 @@
 from django.shortcuts import render
 from django.db.models import Q
+from django.utils import timezone
 
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -29,11 +30,19 @@ class BlogListAPIView(APIView):
 
     def get(self, request):
 
+        now = timezone.now()
         blogs = (
             BlogPage.objects
             .live()
             .specific()
             .select_related("category", "subcategory")
+            .filter(subcategory__isnull=False)
+            .filter(
+                Q(published_date__isnull=True) | Q(published_date__lte=now)
+            )
+            .filter(
+                Q(go_live_at__isnull=True) | Q(go_live_at__lte=now)
+            )
             .order_by("-published_date")
         )
 
@@ -42,6 +51,13 @@ class BlogListAPIView(APIView):
         subcategory = request.query_params.get("subcategory")
         search_query = request.query_params.get("search") or request.query_params.get("q")
         author = request.query_params.get("author")
+        current_blog_slug = request.query_params.get("current_blog_slug")
+
+        # Return empty result if category or subcategory is 'uncategorized'
+        if (category and str(category).strip().lower() == "uncategorized") or (
+            subcategory and str(subcategory).strip().lower() == "uncategorized"
+        ):
+            blogs = BlogPage.objects.none()
 
         # Filter by category (slug or id)
         if category:
@@ -86,6 +102,10 @@ class BlogListAPIView(APIView):
             if author.isdigit():
                 author_filter |= Q(owner__id=int(author))
             blogs = blogs.filter(author_filter).distinct()
+        
+        # Filter by current blog (slug or id)
+        if current_blog_slug:
+            blogs = blogs.exclude(Q(slug=current_blog_slug))
 
 
         # Pagination
@@ -112,12 +132,19 @@ class BlogDetailAPIView(APIView):
 
     def get(self, request, slug):
 
+        now = timezone.now()
         try:
             blog = (
                 BlogPage.objects
                 .live()
                 .specific()
                 .select_related("category", "subcategory")
+                .filter(
+                    Q(published_date__isnull=True) | Q(published_date__lte=now)
+                )
+                .filter(
+                    Q(go_live_at__isnull=True) | Q(go_live_at__lte=now)
+                )
                 .get(slug=slug)
             )
 
@@ -217,6 +244,8 @@ class BlogPreviewAPIView(APIView):
             )
 
         page = page_preview.as_page()
+        if not getattr(page, "pk", None):
+            page.pk = 0
         serializer = BlogDetailSerializer(page, context={"request": request})
 
         return success_response(
@@ -351,12 +380,19 @@ class AuthorBlogListAPIView(APIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
+        now = timezone.now()
         blogs = (
             BlogPage.objects
             .live()
             .specific()
             .select_related("category", "subcategory")
             .filter(owner_id=user_id)
+            .filter(
+                Q(published_date__isnull=True) | Q(published_date__lte=now)
+            )
+            .filter(
+                Q(go_live_at__isnull=True) | Q(go_live_at__lte=now)
+            )
             .order_by("-published_date")
         )
 

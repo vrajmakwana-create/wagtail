@@ -13,6 +13,7 @@ from wagtail.snippets.models import register_snippet
 from wagtail.snippets.views.snippets import SnippetViewSet
 
 from .blocks import BlogStreamBlock
+from .panels import SEOAnalysisPanel
 from wagtail_headless_preview.models import HeadlessPreviewMixin
 from wagtail.api import APIField
 from wagtail.fields import RichTextField
@@ -70,6 +71,51 @@ class BlogPageForm(WagtailAdminPageForm):
             if "category" in self.fields:
                 self.fields["category"].required = False
 
+        if "author" in self.fields:
+            from django.contrib.auth import get_user_model
+            User = get_user_model()
+
+            user_choices = []
+            for u in User.objects.all():
+                full_name = u.get_full_name()
+                display_name = full_name if full_name else u.username
+                user_choices.append((display_name, f"{display_name} ({u.username})"))
+
+            try:
+                existing_authors = (
+                    BlogPage.objects.exclude(author="")
+                    .values_list("author", flat=True)
+                    .distinct()
+                )
+                for ext in existing_authors:
+                    if ext and not any(ext == c[0] for c in user_choices):
+                        user_choices.append((ext, ext))
+            except Exception:
+                pass
+
+            user_choices = sorted(user_choices, key=lambda x: x[1].lower())
+
+            default_author = ""
+            if self.instance and hasattr(self.instance, "author") and self.instance.author:
+                default_author = self.instance.author
+            elif self.instance and hasattr(self.instance, "owner") and self.instance.owner:
+                default_author = self.instance.owner.get_full_name() or self.instance.owner.username
+            elif hasattr(self, "for_user") and self.for_user:
+                default_author = self.for_user.get_full_name() or self.for_user.username
+
+            if default_author and not any(default_author == c[0] for c in user_choices):
+                user_choices.insert(0, (default_author, default_author))
+
+            self.fields["author"].widget = forms.Select(
+                choices=[("", "-- Select Author --")] + user_choices
+            )
+            self.fields["author"].required = False
+
+            if default_author:
+                self.initial["author"] = default_author
+
+
+
 
 
 # BlogPage DB Schema
@@ -116,6 +162,7 @@ class BlogPage(HeadlessPreviewMixin, Page):
     published_date = models.DateTimeField(
         null=True,
         blank=True,
+        help_text="Leave blank to publish immediately with current time, or select a future date/time to schedule.",
     )
 
     author = models.CharField(
@@ -199,10 +246,18 @@ class BlogPage(HeadlessPreviewMixin, Page):
         analyzer = BlogSEOAnalyzer(self)
         return analyzer.run_seo_analysis()
 
+    @property
+    def seo_report(self):
+        return self.get_seo_report()
+
     def get_readability_report(self):
         from .seo_analyzer import BlogSEOAnalyzer
         analyzer = BlogSEOAnalyzer(self)
         return analyzer.run_readability_analysis()
+
+    @property
+    def readability_report(self):
+        return self.get_readability_report()
 
     def get_json_ld_schema(self):
         return {
@@ -220,6 +275,10 @@ class BlogPage(HeadlessPreviewMixin, Page):
                 "@id": self.full_url or self.url or "",
             }
         }
+
+    @property
+    def json_ld_schema(self):
+        return self.get_json_ld_schema()
 
     # Fields exposed to Wagtail API
     api_fields = [
@@ -263,22 +322,6 @@ class BlogPage(HeadlessPreviewMixin, Page):
                 self.subcategory = get_default_uncategorized_subcategory()
             self.category = self.subcategory.category
 
-        if self.published_date and self.published_date <= timezone.now():
-            if self.first_published_at:
-                pass
-            elif self.pk:
-                orig = BlogPage.objects.filter(pk=self.pk).values("published_date", "go_live_at").first()
-                if orig and (orig["published_date"] == self.published_date or orig["go_live_at"] == self.published_date):
-                    pass
-                else:
-                    raise ValidationError(
-                        {"published_date": "Publish date must be a future date and time."}
-                    )
-            else:
-                raise ValidationError(
-                    {"published_date": "Publish date must be a future date and time."}
-                )
-
     def save(self, *args, **kwargs):
         if self.is_child_blog_page():
             self.category = None
@@ -288,14 +331,43 @@ class BlogPage(HeadlessPreviewMixin, Page):
                 self.subcategory = get_default_uncategorized_subcategory()
             self.category = self.subcategory.category
 
+        now = timezone.now()
+        if not self.published_date:
+            if self.go_live_at:
+                self.published_date = self.go_live_at
+            elif self.first_published_at:
+                self.published_date = self.first_published_at
+            else:
+                self.published_date = now
+
         if self.published_date:
             self.go_live_at = self.published_date
-        elif self.go_live_at:
-            self.published_date = self.go_live_at
+
+        if self.published_date > now:
+            self.live = False
+            self.has_unset_scheduled_publication = True
+
+        if self.owner:
+            owner_name = self.owner.get_full_name() or self.owner.username
+            if not self.author or self.author != owner_name:
+                self.author = owner_name
+        elif self.author:
+            from django.contrib.auth import get_user_model
+            User = get_user_model()
+            matched_user = User.objects.filter(
+                models.Q(username=self.author) |
+                models.Q(first_name__icontains=self.author) |
+                models.Q(last_name__icontains=self.author)
+            ).first()
+            if matched_user:
+                self.owner = matched_user
 
         super().save(*args, **kwargs)
 
     def save_revision(self, *args, **kwargs):
+        if not self.published_date:
+            self.published_date = timezone.now()
+
         if self.published_date and not kwargs.get("approved_go_live_at"):
             if self.published_date > timezone.now():
                 kwargs["approved_go_live_at"] = self.published_date
@@ -306,8 +378,9 @@ class BlogPage(HeadlessPreviewMixin, Page):
         FieldPanel("short_description"),
         FieldPanel("featured_image"),
         FieldPanel("body"),
-        FieldPanel("published_date", widget=FutureAdminDateTimeInput()),
+        FieldPanel("published_date", widget=AdminDateTimeInput()),
         FieldPanel("subcategory"),
+        FieldPanel("author", heading="Author"),
     ]
 
 
@@ -315,6 +388,7 @@ class BlogPage(HeadlessPreviewMixin, Page):
     promote_panels = Page.promote_panels + [  # type: ignore[bad-override]
         FieldPanel("focus_keyphrase"),
         FieldPanel("keyphrase_synonyms"),
+        SEOAnalysisPanel(),
         FieldPanel("canonical_url"),
         FieldPanel("is_cornerstone"),
         FieldPanel("robots_index"),
