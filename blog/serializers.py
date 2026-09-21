@@ -218,12 +218,25 @@ def get_author_details(obj, context=None):
     if obj.owner:
         return get_user_author_details(obj.owner, context)
 
+    if obj.author:
+        from django.contrib.auth import get_user_model
+        from django.db.models import Q
+        User = get_user_model()
+        user = User.objects.filter(
+            Q(username=obj.author) |
+            Q(first_name__icontains=obj.author) |
+            Q(last_name__icontains=obj.author)
+        ).first()
+        if user:
+            return get_user_author_details(user, context)
+
     return {
         "id": None,
         "name": obj.author if obj.author else "Admin",
         "bio": "",
         "profile_image_url": None,
     }
+
 
 
 

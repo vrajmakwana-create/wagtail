@@ -448,18 +448,13 @@ class Command(BaseCommand):
             p_terms = post_terms.get(wp_id, [])
 
             if p_terms and not dry_run:
-                cats_in_post = [cat_map[tid] for tid, pid in p_terms if tid in cat_map and isinstance(cat_map[tid], BlogCategory)]
                 subcats_in_post = [subcat_map[tid] for tid, pid in p_terms if tid in subcat_map and isinstance(subcat_map[tid], BlogSubCategory)]
 
                 if subcats_in_post:
                     subcat_obj = subcats_in_post[0]
                     cat_obj = subcat_obj.category
-                elif cats_in_post:
-                    cat_obj = cats_in_post[0]
-                    # Find a subcategory under this category if one exists
-                    subcat_obj = BlogSubCategory.objects.filter(category=cat_obj).first()
 
-            # If still no category or subcategory assigned, use Uncategorized fallback
+            # If no subcategory assigned, default to Uncategorized
             if not subcat_obj and not dry_run:
                 subcat_obj = default_subcat
                 cat_obj = default_subcat.category if default_subcat else None

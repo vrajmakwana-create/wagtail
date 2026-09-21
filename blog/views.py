@@ -1,5 +1,6 @@
 from django.shortcuts import render
 from django.db.models import Q
+from django.utils import timezone
 
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -29,12 +30,19 @@ class BlogListAPIView(APIView):
 
     def get(self, request):
 
+        now = timezone.now()
         blogs = (
             BlogPage.objects
             .live()
             .specific()
             .select_related("category", "subcategory")
             .filter(subcategory__isnull=False)
+            .filter(
+                Q(published_date__isnull=True) | Q(published_date__lte=now)
+            )
+            .filter(
+                Q(go_live_at__isnull=True) | Q(go_live_at__lte=now)
+            )
             .order_by("-published_date")
         )
 
@@ -124,12 +132,19 @@ class BlogDetailAPIView(APIView):
 
     def get(self, request, slug):
 
+        now = timezone.now()
         try:
             blog = (
                 BlogPage.objects
                 .live()
                 .specific()
                 .select_related("category", "subcategory")
+                .filter(
+                    Q(published_date__isnull=True) | Q(published_date__lte=now)
+                )
+                .filter(
+                    Q(go_live_at__isnull=True) | Q(go_live_at__lte=now)
+                )
                 .get(slug=slug)
             )
 
@@ -365,12 +380,19 @@ class AuthorBlogListAPIView(APIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
+        now = timezone.now()
         blogs = (
             BlogPage.objects
             .live()
             .specific()
             .select_related("category", "subcategory")
             .filter(owner_id=user_id)
+            .filter(
+                Q(published_date__isnull=True) | Q(published_date__lte=now)
+            )
+            .filter(
+                Q(go_live_at__isnull=True) | Q(go_live_at__lte=now)
+            )
             .order_by("-published_date")
         )
 
